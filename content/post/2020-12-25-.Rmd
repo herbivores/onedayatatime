@@ -1,0 +1,17 @@
+---
+title: 'Best R Hugo Blogdown Site End to End Tutorial'
+author: ''
+date: '2020-12-25'
+slug: ''
+categories: []
+tags: []
+description: ''
+---
+
+# Best R Hugo Blogdown Site End to End Tutorial
+
+https://www.youtube.com/watch?v=9Jqvaoeh1W4
+
+Hugo Blogdown Site using R/RStudio and hosted for free using Github and Netlify for continuous integration, continuous deployment website. 
+
+![CradleToGraveR](https://www.youtube.com/channel/UCA-hX4v0FEIKOzY8yikt8ow)
