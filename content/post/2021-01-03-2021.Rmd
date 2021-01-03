@@ -1,0 +1,111 @@
+---
+title: '2021'
+author: ''
+date: '2021-01-03'
+slug: '2021'
+categories: []
+tags:
+  - development
+---
+
+
+```{r setup, echo = FALSE, message = FALSE, warning = FALSE}
+knitr::opts_chunk$set(message = FALSE,
+                      warning = FALSE,
+                      fig.width = 6, 
+                      fig.height = 8,
+                      fig.align = 'center',
+                      out.width='70%')
+
+library(tidyverse)
+library(tidyquant)
+
+```
+
+```{r}
+# Get stock pairs
+stock_prices <- c("AAPL", "MA", "V") %>%
+    tq_get(get  = "stock.prices",
+           from = "2018-01-01",
+           to   = "2020-12-31") %>%
+    group_by(symbol) 
+
+stock_pairs <- stock_prices %>%
+    tq_transmute(select     = adjusted,
+                 mutate_fun = periodReturn,
+                 period     = "daily",
+                 type       = "log",
+                 col_rename = "returns") %>%
+    spread(key = symbol, value = returns)
+```
+
+We can visualize the relationship between the returns of the stock pairs like so.
+
+```{r}
+stock_pairs %>%
+    ggplot(aes(x = AAPL, y = MA)) +
+    geom_point(color = palette_light()[[1]], alpha = 0.5) +
+    geom_smooth(method = "lm") +
+    labs(title = "Visualizing Returns Relationship of Stock Pairs") +
+    theme_tq()
+```
+
+We can get statistcs on the relationship from the `lm` function. The model is highly correlated with a p-value of essential zero. The coefficient estimate for V (Coefficient 1) is 0.8134 indicating a positive relationship, meaning as V increases MA also tends to increase. 
+
+```{r}
+lm(MA ~ AAPL, data = stock_pairs) %>%
+    summary()
+```
+
+While this characterizes the overall relationship, it's missing the time aspect. Fortunately, we can use the `rollapply` function from the `zoo` package to plot a rolling regression, showing how the model coefficent varies on a rolling basis over time. We calculate rolling regressions with `tq_mutate()` in two additional steps:
+
+1. Create a custom function
+2. Apply the function with `tq_mutate(mutate_fun = rollapply)`
+
+First, create a custom regression function. An important point is that the "data" will be passed to the regression function as an `xts` object. The `timetk::tk_tbl` function takes care of converting to a data frame.
+
+```{r}
+regr_fun <- function(data) {
+    coef(lm(MA ~ AAPL, data = timetk::tk_tbl(data, silent = TRUE)))
+}
+```
+
+Now we can use `tq_mutate()` to apply the custom regression function over a rolling window using `rollapply` from the `zoo` package. Internally, the `returns_combined` data frame is being passed automatically to the `data` argument of the `rollapply` function. All you need to specify is the `mutate_fun = rollapply` and any additional arguments necessary to apply the `rollapply` function. We'll specify a 90 day window via `width = 90`. The `FUN` argument is our custom regression function, `regr_fun`. It's extremely important to specify `by.column = FALSE`, which tells `rollapply` to perform the computation using the data as a whole rather than apply the function to each column independently. The `col_rename` argument is used to rename the added columns.
+
+```{r}
+stock_pairs <- stock_pairs %>%
+         tq_mutate(mutate_fun = rollapply,
+                   width      = 90,
+                   FUN        = regr_fun,
+                   by.column  = FALSE,
+                   col_rename = c("coef.0", "coef.1"))
+#stock_pairs
+```
+
+Finally, we can visualize the first coefficient like so. A horizontal line is added using the full data set model. This gives us insight as to points in time where the relationship deviates significantly from the long run trend which can be explored for potential pair trade opportunities. 
+
+```{r}
+stock_pairs %>%
+    ggplot(aes(x = date, y = coef.1)) +
+    geom_line(size = 1, color = palette_light()[[1]]) +
+    geom_hline(yintercept = 0.8134, size = 1, color = palette_light()[[2]]) +
+    labs(title = "Visualizing Rolling Regression Coefficient", x = "") +
+    theme_tq()
+```
+
+Stock returns during this time period.
+
+```{r}
+stock_prices %>%
+    tq_transmute(adjusted, 
+                 periodReturn, 
+                 period = "daily", 
+                 type = "log", 
+                 col_rename = "returns") %>%
+    mutate(wealth.index = 100 * cumprod(1 + returns)) %>%
+    ggplot(aes(x = date, y = wealth.index, color = symbol)) +
+    geom_line(size = 1) +
+    labs(title = "Stock Prices") +
+    theme_tq() + 
+    scale_color_tq()
+```
