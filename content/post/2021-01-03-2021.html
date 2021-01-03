@@ -12,29 +12,29 @@ tags:
 
 <pre class="r"><code># Get stock pairs
 stock_prices &lt;- c(&quot;AAPL&quot;, &quot;MA&quot;, &quot;V&quot;) %&gt;%
-    tq_get(get  = &quot;stock.prices&quot;,
-           from = &quot;2018-01-01&quot;,
-           to   = &quot;2020-12-31&quot;) %&gt;%
-    group_by(symbol) 
+  tq_get(get  = &quot;stock.prices&quot;,
+         from = &quot;2018-01-01&quot;,
+         to   = &quot;2020-12-31&quot;) %&gt;%
+  group_by(symbol) 
 
 stock_pairs &lt;- stock_prices %&gt;%
-    tq_transmute(select     = adjusted,
-                 mutate_fun = periodReturn,
-                 period     = &quot;daily&quot;,
-                 type       = &quot;log&quot;,
-                 col_rename = &quot;returns&quot;) %&gt;%
+  tq_transmute(select     = adjusted,
+               mutate_fun = periodReturn,
+               period     = &quot;daily&quot;,
+               type       = &quot;log&quot;,
+               col_rename = &quot;returns&quot;) %&gt;%
     spread(key = symbol, value = returns)</code></pre>
 <p>We can visualize the relationship between the returns of the stock pairs like so.</p>
 <pre class="r"><code>stock_pairs %&gt;%
-    ggplot(aes(x = AAPL, y = MA)) +
-    geom_point(color = palette_light()[[1]], alpha = 0.5) +
-    geom_smooth(method = &quot;lm&quot;) +
-    labs(title = &quot;Visualizing Returns Relationship of Stock Pairs&quot;) +
-    theme_tq()</code></pre>
+  ggplot(aes(x = AAPL, y = MA)) +
+  geom_point(color = palette_light()[[1]], alpha = 0.5) +
+  geom_smooth(method = &quot;lm&quot;) +
+  labs(title = &quot;Visualizing Returns Relationship of Stock Pairs&quot;) +
+  theme_tq()</code></pre>
 <p><img src="/post/2021-01-03-2021_files/figure-html/unnamed-chunk-2-1.png" width="70%" style="display: block; margin: auto;" /></p>
 <p>We can get statistcs on the relationship from the <code>lm</code> function. The model is highly correlated with a p-value of essential zero. The coefficient estimate for V (Coefficient 1) is 0.8134 indicating a positive relationship, meaning as V increases MA also tends to increase.</p>
 <pre class="r"><code>lm(MA ~ AAPL, data = stock_pairs) %&gt;%
-    summary()</code></pre>
+  summary()</code></pre>
 <pre><code>## 
 ## Call:
 ## lm(formula = MA ~ AAPL, data = stock_pairs)
@@ -64,31 +64,31 @@ stock_pairs &lt;- stock_prices %&gt;%
 }</code></pre>
 <p>Now we can use <code>tq_mutate()</code> to apply the custom regression function over a rolling window using <code>rollapply</code> from the <code>zoo</code> package. Internally, the <code>returns_combined</code> data frame is being passed automatically to the <code>data</code> argument of the <code>rollapply</code> function. All you need to specify is the <code>mutate_fun = rollapply</code> and any additional arguments necessary to apply the <code>rollapply</code> function. We’ll specify a 90 day window via <code>width = 90</code>. The <code>FUN</code> argument is our custom regression function, <code>regr_fun</code>. It’s extremely important to specify <code>by.column = FALSE</code>, which tells <code>rollapply</code> to perform the computation using the data as a whole rather than apply the function to each column independently. The <code>col_rename</code> argument is used to rename the added columns.</p>
 <pre class="r"><code>stock_pairs &lt;- stock_pairs %&gt;%
-         tq_mutate(mutate_fun = rollapply,
-                   width      = 90,
-                   FUN        = regr_fun,
-                   by.column  = FALSE,
-                   col_rename = c(&quot;coef.0&quot;, &quot;coef.1&quot;))
+  tq_mutate(mutate_fun = rollapply,
+            width      = 90,
+            FUN        = regr_fun,
+            by.column  = FALSE,
+            col_rename = c(&quot;coef.0&quot;, &quot;coef.1&quot;))
 #stock_pairs</code></pre>
 <p>Finally, we can visualize the first coefficient like so. A horizontal line is added using the full data set model. This gives us insight as to points in time where the relationship deviates significantly from the long run trend which can be explored for potential pair trade opportunities.</p>
 <pre class="r"><code>stock_pairs %&gt;%
-    ggplot(aes(x = date, y = coef.1)) +
-    geom_line(size = 1, color = palette_light()[[1]]) +
-    geom_hline(yintercept = 0.8134, size = 1, color = palette_light()[[2]]) +
-    labs(title = &quot;Visualizing Rolling Regression Coefficient&quot;, x = &quot;&quot;) +
-    theme_tq()</code></pre>
+  ggplot(aes(x = date, y = coef.1)) +
+  geom_line(size = 1, color = palette_light()[[1]]) +
+  geom_hline(yintercept = 0.8134, size = 1, color = palette_light()[[2]]) +
+  labs(title = &quot;Visualizing Rolling Regression Coefficient&quot;, x = &quot;&quot;) +
+  theme_tq()</code></pre>
 <p><img src="/post/2021-01-03-2021_files/figure-html/unnamed-chunk-6-1.png" width="70%" style="display: block; margin: auto;" /></p>
 <p>Stock returns during this time period.</p>
 <pre class="r"><code>stock_prices %&gt;%
-    tq_transmute(adjusted, 
-                 periodReturn, 
-                 period = &quot;daily&quot;, 
-                 type = &quot;log&quot;, 
-                 col_rename = &quot;returns&quot;) %&gt;%
-    mutate(wealth.index = 100 * cumprod(1 + returns)) %&gt;%
-    ggplot(aes(x = date, y = wealth.index, color = symbol)) +
-    geom_line(size = 1) +
-    labs(title = &quot;Stock Prices&quot;) +
-    theme_tq() + 
-    scale_color_tq()</code></pre>
+  tq_transmute(adjusted,
+               periodReturn,
+               period = &quot;daily&quot;,
+               type = &quot;log&quot;,
+               col_rename = &quot;returns&quot;) %&gt;%
+  mutate(wealth.index = 100 * cumprod(1 + returns)) %&gt;%
+  ggplot(aes(x = date, y = wealth.index, color = symbol)) +
+  geom_line(size = 1) +
+  labs(title = &quot;Stock Prices&quot;) +
+  theme_tq() +
+  scale_color_tq()</code></pre>
 <p><img src="/post/2021-01-03-2021_files/figure-html/unnamed-chunk-7-1.png" width="70%" style="display: block; margin: auto;" /></p>
